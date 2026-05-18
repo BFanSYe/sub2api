@@ -1,0 +1,179 @@
+name: Build Sub2API image
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repo:
+        description: "GitHub repository to build from (owner/repo). Use BFanSYe/sub2api for fork patches or Wei-Shaw/sub2api for pristine upstream."
+        required: true
+        default: "BFanSYe/sub2api"
+        type: string
+      source_ref:
+        description: "Branch, tag, or commit SHA to build. For production, prefer an exact commit SHA."
+        required: true
+        default: "main"
+        type: string
+      image_name:
+        description: "GHCR image name. Use 'sub2api' for ghcr.io/<owner>/sub2api, or owner/name."
+        required: true
+        default: "sub2api"
+        type: string
+      extra_tag:
+        description: "Optional additional tag, e.g. v0.1.126-hotfix. Tag is sanitized before use."
+        required: false
+        default: ""
+        type: string
+      tag_latest:
+        description: "Also push :latest. Keep false for production unless explicitly intended."
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-sub2api-image-${{ github.event.inputs.source_repo }}-${{ github.event.inputs.source_ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and push linux/amd64 image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout requested source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.source_repo }}
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image metadata
+        id: meta
+        shell: bash
+        env:
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          IMAGE_NAME_INPUT: ${{ inputs.image_name }}
+          EXTRA_TAG_INPUT: ${{ inputs.extra_tag }}
+          TAG_LATEST_INPUT: ${{ inputs.tag_latest }}
+        run: |
+          set -euo pipefail
+
+          sanitize_tag() {
+            local raw="$1"
+            raw="${raw,,}"
+            raw="$(printf '%s' "$raw" | sed -E 's/[^a-z0-9_.-]+/-/g; s/^-+//; s/-+$//; s/-+/-/g')"
+            if [ -z "$raw" ]; then
+              raw="custom"
+            fi
+            printf '%s' "$raw"
+          }
+
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          image_input="${IMAGE_NAME_INPUT,,}"
+          if [[ "$image_input" == ghcr.io/* ]]; then
+            image="$image_input"
+          elif [[ "$image_input" == */* ]]; then
+            image="ghcr.io/$image_input"
+          else
+            image="ghcr.io/${owner}/${image_input}"
+          fi
+
+          sha="$(git rev-parse HEAD)"
+          short_sha="${sha:0:12}"
+          source_ref_tag="$(sanitize_tag "$SOURCE_REF")"
+          source_repo_tag="$(sanitize_tag "$SOURCE_REPO")"
+          date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          tags_file="$(mktemp)"
+          {
+            printf '%s:sha-%s\n' "$image" "$short_sha"
+            printf '%s:%s-%s\n' "$image" "$source_ref_tag" "$short_sha"
+            printf '%s:%s-%s\n' "$image" "$source_repo_tag" "$short_sha"
+          } > "$tags_file"
+
+          if [ -n "$EXTRA_TAG_INPUT" ]; then
+            printf '%s:%s\n' "$image" "$(sanitize_tag "$EXTRA_TAG_INPUT")" >> "$tags_file"
+          fi
+
+          if [ "$TAG_LATEST_INPUT" = "true" ]; then
+            printf '%s:latest\n' "$image" >> "$tags_file"
+          fi
+
+          sort -u "$tags_file" -o "$tags_file"
+
+          {
+            echo "image=$image"
+            echo "sha=$sha"
+            echo "short_sha=$short_sha"
+            echo "source_ref_tag=$source_ref_tag"
+            echo "source_repo_tag=$source_repo_tag"
+            echo "date=$date"
+            echo "tags<<EOF"
+            cat "$tags_file"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Resolved commit: $sha"
+          echo "Image: $image"
+          echo "Tags:"
+          cat "$tags_file"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=Sub2API
+            org.opencontainers.image.description=Custom Sub2API image built from ${{ inputs.source_repo }}@${{ steps.meta.outputs.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.date }}
+          build-args: |
+            COMMIT=${{ steps.meta.outputs.sha }}
+            DATE=${{ steps.meta.outputs.date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Write build summary
+        shell: bash
+        run: |
+          {
+            echo "## Sub2API image build"
+            echo
+            echo "- Source repo: \`${{ inputs.source_repo }}\`"
+            echo "- Source ref input: \`${{ inputs.source_ref }}\`"
+            echo "- Resolved commit: \`${{ steps.meta.outputs.sha }}\`"
+            echo "- Image: \`${{ steps.meta.outputs.image }}\`"
+            echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
+            echo
+            echo "### Tags"
+            while IFS= read -r tag; do
+              echo "- \`$tag\`"
+            done <<< "${{ steps.meta.outputs.tags }}"
+            echo
+            echo "### Production Compose reference"
+            echo
+            echo '```yaml'
+            echo "image: ${{ steps.meta.outputs.image }}@${{ steps.build.outputs.digest }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
