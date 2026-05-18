@@ -90,10 +90,10 @@ jobs:
           date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
           tags_file="$(mktemp)"
+          # Keep default tags short and production-friendly. The digest remains
+          # the immutable reference for deploys; tags are human-friendly aliases.
           {
-            printf '%s:sha-%s\n' "$image" "$short_sha"
-            printf '%s:%s-%s\n' "$image" "$source_ref_tag" "$short_sha"
-            printf '%s:%s-%s\n' "$image" "$source_repo_tag" "$short_sha"
+            printf '%s:%s\n' "$image" "$short_sha"
           } > "$tags_file"
 
           if [ -n "$EXTRA_TAG_INPUT" ]; then
