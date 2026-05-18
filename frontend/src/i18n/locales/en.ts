@@ -13,6 +13,12 @@ export default {
     // User-focused value proposition
     heroSubtitle: 'One Key, All AI Models',
     heroDescription: 'No need to manage multiple subscriptions. Access Claude, GPT, Gemini and more with a single API key',
+    heroLede: 'Subscription-to-API Gateway',
+    featureTaglines: {
+      integrate: 'Change one base_url and your existing OpenAI / Claude SDKs keep working.',
+      reliable: 'Multi-upstream account pool with automatic failover and reroute.',
+      metered: 'Per-token real-time billing with hard quota caps you control.'
+    },
     tags: {
       subscriptionToApi: 'Subscription to API',
       stickySession: 'Session Persistence',

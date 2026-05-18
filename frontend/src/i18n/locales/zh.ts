@@ -13,6 +13,12 @@ export default {
     // 新增：面向用户的价值主张
     heroSubtitle: '一个密钥，畅用多个 AI 模型',
     heroDescription: '无需管理多个订阅账号，一站式接入 Claude、GPT、Gemini 等主流 AI 服务',
+    heroLede: '订阅转 API 网关平台',
+    featureTaglines: {
+      integrate: '一行 base_url，复用现有 OpenAI / Claude SDK。',
+      reliable: '多上游账号池调度，断点自动重路由。',
+      metered: '按 token 实时计费，配额上限可控。'
+    },
     tags: {
       subscriptionToApi: '订阅转 API',
       stickySession: '会话保持',

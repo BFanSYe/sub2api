@@ -92,7 +92,7 @@
             <span class="hv-hero__title-accent">{{ t('home.heroSubtitle') }}</span>
           </h1>
 
-          <p class="hv-hero__lede-1" data-reveal data-reveal-delay="260">订阅转 API 网关平台</p>
+          <p class="hv-hero__lede-1" data-reveal data-reveal-delay="260">{{ t('home.heroLede') }}</p>
           <p class="hv-hero__lede-2" data-reveal data-reveal-delay="360">{{ t('home.heroDescription') }}</p>
 
           <div class="hv-hero__ctas" data-reveal data-reveal-delay="480">
@@ -156,7 +156,7 @@
               <span>01 / INTEGRATE</span>
             </span>
             <h2 class="hv-feat-title">{{ t('home.features.unifiedGateway') }}</h2>
-            <p class="hv-feat-tagline">一行 base_url，复用现有 OpenAI / Claude SDK。</p>
+            <p class="hv-feat-tagline">{{ t('home.featureTaglines.integrate') }}</p>
             <p class="hv-feat-body">{{ t('home.features.unifiedGatewayDesc') }}</p>
           </div>
 
@@ -231,7 +231,7 @@
               <span>02 / RELIABLE</span>
             </span>
             <h2 class="hv-feat-title">{{ t('home.features.multiAccount') }}</h2>
-            <p class="hv-feat-tagline">多上游账号池调度，断点自动重路由。</p>
+            <p class="hv-feat-tagline">{{ t('home.featureTaglines.reliable') }}</p>
             <p class="hv-feat-body">{{ t('home.features.multiAccountDesc') }}</p>
           </div>
         </div>
@@ -246,7 +246,7 @@
               <span>03 / METERED</span>
             </span>
             <h2 class="hv-feat-title">{{ t('home.features.balanceQuota') }}</h2>
-            <p class="hv-feat-tagline">按 token 实时计费，配额上限可控。</p>
+            <p class="hv-feat-tagline">{{ t('home.featureTaglines.metered') }}</p>
             <p class="hv-feat-body">{{ t('home.features.balanceQuotaDesc') }}</p>
           </div>
 
