@@ -123,6 +123,15 @@ jobs:
           echo "Tags:"
           cat "$tags_file"
 
+      - name: Pin Dockerfile pnpm version for reproducible builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -q 'corepack prepare pnpm@latest --activate' Dockerfile; then
+            sed -i 's/corepack prepare pnpm@latest --activate/corepack prepare pnpm@9 --activate/' Dockerfile
+          fi
+          grep -n 'corepack prepare pnpm@' Dockerfile
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
