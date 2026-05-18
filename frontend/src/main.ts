@@ -5,9 +5,13 @@ import router from './router'
 import i18n, { initI18n } from './i18n'
 import { useAppStore } from '@/stores/app'
 import './style.css'
+import './styles/theme-1node.css'
 
 function initThemeClass() {
-  const savedTheme = localStorage.getItem('theme')
+  const queryTheme = new URLSearchParams(window.location.search).get('theme')
+  const savedTheme = queryTheme === 'dark' || queryTheme === 'light'
+    ? queryTheme
+    : localStorage.getItem('theme')
   const shouldUseDark =
     savedTheme === 'dark' ||
     (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)

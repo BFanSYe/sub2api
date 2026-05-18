@@ -39,13 +39,14 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const backendUrl = env.VITE_DEV_PROXY_TARGET || 'http://localhost:8080'
   const devPort = Number(env.VITE_DEV_PORT || 3000)
+  // 桌面预览模式下跳过常驻 vue-tsc，避免与 GNOME 抢 CPU 卡死桌面。
+  // 用法：DISABLE_CHECKER=1 vite  (或 pnpm dev:fast)
+  const skipChecker = env.DISABLE_CHECKER === '1'
 
   return {
     plugins: [
       vue(),
-      checker({
-        vueTsc: true
-      }),
+      ...(skipChecker ? [] : [checker({ vueTsc: true })]),
       injectPublicSettings(backendUrl)
     ],
   resolve: {

@@ -19,6 +19,19 @@ export default {
           900: '#134e4a',
           950: '#042f2e'
         },
+        // 1Node 主题强调色组 (c1 粉珊瑚 / c2 青金 / c3 暖橘 / c4 天蓝)
+        c1: {
+          a: '#F5A5B8', b: '#FCC9D4', c: '#B8D4B0', d: '#F5E6D3', deep: '#9F4F60'
+        },
+        c2: {
+          a: '#5DBED6', b: '#8DD7E5', c: '#F4C95D', d: '#FF9B7A'
+        },
+        c3: {
+          a: '#E08A3F', b: '#F0A862', c: '#B85A4D', d: '#8FA876'
+        },
+        c4: {
+          a: '#7DD3FC', b: '#BAE6FD', c: '#B8C2DC', d: '#5B6B9C'
+        },
         // 辅助色 - 深蓝灰
         accent: {
           50: '#f8fafc',
@@ -50,19 +63,28 @@ export default {
       },
       fontFamily: {
         sans: [
-          'system-ui',
+          'Sora',
+          'Noto Sans SC',
+          'PingFang SC',
+          'HarmonyOS Sans SC',
+          'Microsoft YaHei UI',
+          'Microsoft YaHei',
           '-apple-system',
           'BlinkMacSystemFont',
-          'Segoe UI',
-          'Roboto',
-          'Helvetica Neue',
-          'Arial',
+          'system-ui',
+          'sans-serif'
+        ],
+        display: ['Sora', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        zh: [
+          'Noto Sans SC',
           'PingFang SC',
-          'Hiragino Sans GB',
+          'HarmonyOS Sans SC',
+          'Microsoft YaHei UI',
           'Microsoft YaHei',
           'sans-serif'
         ],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+        italic: ['Cormorant Garamond', 'Georgia', 'serif'],
+        mono: ['JetBrains Mono', 'SF Mono', 'Menlo', 'Consolas', 'monospace']
       },
       boxShadow: {
         glass: '0 8px 32px rgba(0, 0, 0, 0.08)',
@@ -90,7 +112,17 @@ export default {
         'scale-in': 'scaleIn 0.2s ease-out',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         shimmer: 'shimmer 2s linear infinite',
-        glow: 'glow 2s ease-in-out infinite alternate'
+        glow: 'glow 2s ease-in-out infinite alternate',
+        // 1Node-style ambient animations
+        float: 't-float 6s ease-in-out infinite',
+        'halo-pulse': 't-halo-pulse 3.2s ease-in-out infinite',
+        'node-pulse': 't-node-pulse 2.4s ease-in-out infinite',
+        'nf-pulse': 't-nf-pulse 4.5s ease-in-out infinite',
+        'stream-flow': 't-stream-flow 6s linear infinite',
+        'spin-slow': 't-spin 14s linear infinite',
+        'spin-rev': 't-spin-r 18s linear infinite',
+        ripple: 't-ripple 1.4s ease-out infinite',
+        rise: 't-rise 0.45s var(--ease-spring, ease-out) both'
       },
       keyframes: {
         fadeIn: {
