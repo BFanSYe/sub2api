@@ -52,7 +52,10 @@ export function useScrollReveal(rootSelector?: string) {
           }
         })
       },
-      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' }
+      // Reveal slightly before the card is fully inside the viewport. The
+      // homepage uses large vertical sections; a negative bottom rootMargin can
+      // leave users staring at a blank grid between headings and cards.
+      { threshold: 0.04, rootMargin: '0px 0px 18% 0px' }
     )
 
     scan()
