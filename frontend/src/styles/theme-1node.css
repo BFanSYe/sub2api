@@ -341,11 +341,12 @@ html.dark {
   color: var(--t-txt-100);
 }
 
-/* Reduced-motion guard for ambient animations. */
+/* `.hv.theme-1node` is the marketing HomeView opt-out: keep its motion
+   even when the OS requests reduced motion; other 1Node surfaces still reduce. */
 @media (prefers-reduced-motion: reduce) {
-  .theme-1node *,
-  .theme-1node *::before,
-  .theme-1node *::after {
+  .theme-1node:not(.hv) *,
+  .theme-1node:not(.hv) *::before,
+  .theme-1node:not(.hv) *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;

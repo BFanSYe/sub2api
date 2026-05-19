@@ -415,9 +415,6 @@ onMounted(() => {
   opacity: 1;
   transform: none;
 }
-@media (prefers-reduced-motion: reduce) {
-  .hv [data-reveal] { opacity: 1; transform: none; transition: none; }
-}
 
 /* ----- Backdrop ----- */
 .hv-bg {
