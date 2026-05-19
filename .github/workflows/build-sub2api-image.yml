@@ -13,6 +13,21 @@ on:
         required: true
         default: "main"
         type: string
+      upstream_repo:
+        description: "Upstream repository used for hotfix ancestry and missing commit checks."
+        required: true
+        default: "Wei-Shaw/sub2api"
+        type: string
+      upstream_ref:
+        description: "Upstream branch, tag, or commit SHA used for missing commit checks."
+        required: true
+        default: "main"
+        type: string
+      required_fixes:
+        description: "Required upstream hotfix commit SHAs (multiline string, one SHA per line or whitespace-separated)."
+        required: false
+        default: ""
+        type: string
       image_name:
         description: "GHCR image name. Use 'sub2api' for ghcr.io/<owner>/sub2api, or owner/name."
         required: true
@@ -73,6 +88,15 @@ jobs:
             printf '%s' "$raw"
           }
 
+          is_owner_repo() {
+            [[ "$1" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          }
+
+          if ! is_owner_repo "$SOURCE_REPO"; then
+            echo "::error::source_repo must be OWNER/REPO, got: $SOURCE_REPO"
+            exit 1
+          fi
+
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           image_input="${IMAGE_NAME_INPUT,,}"
           if [[ "$image_input" == ghcr.io/* ]]; then
@@ -123,6 +147,87 @@ jobs:
           echo "Tags:"
           cat "$tags_file"
 
+      - name: Verify required fixes and upstream status
+        id: upstream
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ steps.meta.outputs.sha }}
+          REQUIRED_FIXES_INPUT: ${{ inputs.required_fixes }}
+          UPSTREAM_REPO: ${{ inputs.upstream_repo }}
+          UPSTREAM_REF: ${{ inputs.upstream_ref }}
+        run: |
+          set -euo pipefail
+
+          is_owner_repo() {
+            [[ "$1" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          }
+
+          if ! is_owner_repo "$UPSTREAM_REPO"; then
+            echo "::error::upstream_repo must be OWNER/REPO, got: $UPSTREAM_REPO"
+            exit 1
+          fi
+
+          if [ -z "$UPSTREAM_REF" ]; then
+            echo "::error::upstream_ref must not be empty"
+            exit 1
+          fi
+
+          mapfile -t required_fixes < <(
+            printf '%s\n' "$REQUIRED_FIXES_INPUT" |
+              tr ',;[:space:]' '\n' |
+              sed '/^$/d'
+          )
+
+          normalized_fixes_file="$(mktemp)"
+          failed=0
+
+          if [ "${#required_fixes[@]}" -eq 0 ]; then
+            echo "No required fixes declared."
+          else
+            for fix in "${required_fixes[@]}"; do
+              if [[ ! "$fix" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+                echo "::error::required fix is not a commit SHA: $fix"
+                failed=1
+                continue
+              fi
+
+              if ! fix_commit="$(git rev-parse --verify "$fix^{commit}" 2>/dev/null)"; then
+                echo "::error::required fix is not present in the source checkout: $fix"
+                failed=1
+                continue
+              fi
+
+              if git merge-base --is-ancestor "$fix_commit" "$SOURCE_COMMIT"; then
+                printf '%s\n' "$fix_commit" >> "$normalized_fixes_file"
+                echo "Required fix is an ancestor: $fix_commit"
+              else
+                echo "::error::required fix is not an ancestor of source commit: $fix_commit"
+                failed=1
+              fi
+            done
+          fi
+
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+
+          git fetch --quiet --no-tags "https://github.com/${UPSTREAM_REPO}.git" "$UPSTREAM_REF"
+          upstream_commit="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+          missing_total="$(git rev-list --count "${SOURCE_COMMIT}..${upstream_commit}")"
+          missing_nonmerge="$(git rev-list --count --no-merges "${SOURCE_COMMIT}..${upstream_commit}")"
+
+          {
+            echo "upstream_commit=$upstream_commit"
+            echo "missing_upstream_total=$missing_total"
+            echo "missing_upstream_nonmerge=$missing_nonmerge"
+            echo "required_fixes<<EOF"
+            cat "$normalized_fixes_file"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Upstream commit: $upstream_commit"
+          echo "Missing upstream commits: total=$missing_total nonmerge=$missing_nonmerge"
+
       - name: Pin Dockerfile pnpm version for reproducible builds
         shell: bash
         run: |
@@ -154,7 +259,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=Sub2API
             org.opencontainers.image.description=Custom Sub2API image built from ${{ inputs.source_repo }}@${{ steps.meta.outputs.sha }}
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.source=https://github.com/${{ inputs.source_repo }}
             org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
             org.opencontainers.image.created=${{ steps.meta.outputs.date }}
           build-args: |
@@ -163,26 +268,127 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Write build summary
+      - name: Write build manifest and summary
         shell: bash
+        env:
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          SOURCE_REF_INPUT: ${{ inputs.source_ref }}
+          SOURCE_COMMIT: ${{ steps.meta.outputs.sha }}
+          UPSTREAM_REPO: ${{ inputs.upstream_repo }}
+          UPSTREAM_REF: ${{ inputs.upstream_ref }}
+          UPSTREAM_COMMIT: ${{ steps.upstream.outputs.upstream_commit }}
+          MISSING_UPSTREAM_TOTAL: ${{ steps.upstream.outputs.missing_upstream_total }}
+          MISSING_UPSTREAM_NONMERGE: ${{ steps.upstream.outputs.missing_upstream_nonmerge }}
+          IMAGE: ${{ steps.meta.outputs.image }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          REQUIRED_FIXES: ${{ steps.upstream.outputs.required_fixes }}
+          BUILD_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          set -euo pipefail
+
+          yaml_quote() {
+            local value="$1"
+            value="${value//$'\r'/}"
+            value="${value//$'\n'/ }"
+            value="${value//\'/\'\'}"
+            printf "'%s'" "$value"
+          }
+
+          write_array() {
+            local name="$1"
+            local data="$2"
+            local printed=0
+
+            while IFS= read -r item; do
+              [ -n "$item" ] || continue
+              if [ "$printed" -eq 0 ]; then
+                printf '%s:\n' "$name"
+                printed=1
+              fi
+              printf '  - '
+              yaml_quote "$item"
+              printf '\n'
+            done <<< "$data"
+
+            if [ "$printed" -eq 0 ]; then
+              printf '%s: []\n' "$name"
+            fi
+          }
+
+          {
+            printf 'source_repo: '
+            yaml_quote "$SOURCE_REPO"
+            printf '\n'
+            printf 'source_ref_input: '
+            yaml_quote "$SOURCE_REF_INPUT"
+            printf '\n'
+            printf 'source_commit: '
+            yaml_quote "$SOURCE_COMMIT"
+            printf '\n'
+            printf 'upstream_repo: '
+            yaml_quote "$UPSTREAM_REPO"
+            printf '\n'
+            printf 'upstream_ref: '
+            yaml_quote "$UPSTREAM_REF"
+            printf '\n'
+            printf 'upstream_commit: '
+            yaml_quote "$UPSTREAM_COMMIT"
+            printf '\n'
+            printf 'missing_upstream_total: %s\n' "$MISSING_UPSTREAM_TOTAL"
+            printf 'missing_upstream_nonmerge: %s\n' "$MISSING_UPSTREAM_NONMERGE"
+            printf 'image: '
+            yaml_quote "$IMAGE"
+            printf '\n'
+            write_array "tags" "$TAGS"
+            printf 'digest: '
+            yaml_quote "$DIGEST"
+            printf '\n'
+            write_array "required_fixes" "$REQUIRED_FIXES"
+            printf 'build_run_url: '
+            yaml_quote "$BUILD_RUN_URL"
+            printf '\n'
+          } > build-manifest.yaml
+
           {
             echo "## Sub2API image build"
             echo
-            echo "- Source repo: \`${{ inputs.source_repo }}\`"
-            echo "- Source ref input: \`${{ inputs.source_ref }}\`"
-            echo "- Resolved commit: \`${{ steps.meta.outputs.sha }}\`"
-            echo "- Image: \`${{ steps.meta.outputs.image }}\`"
-            echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- Source repo: \`$SOURCE_REPO\`"
+            echo "- Source ref input: \`$SOURCE_REF_INPUT\`"
+            echo "- Resolved commit: \`$SOURCE_COMMIT\`"
+            echo "- Upstream repo: \`$UPSTREAM_REPO\`"
+            echo "- Upstream ref: \`$UPSTREAM_REF\`"
+            echo "- Upstream commit: \`$UPSTREAM_COMMIT\`"
+            echo "- Missing upstream commits: total=\`$MISSING_UPSTREAM_TOTAL\`, non-merge=\`$MISSING_UPSTREAM_NONMERGE\`"
+            echo "- Image: \`$IMAGE\`"
+            echo "- Digest: \`$DIGEST\`"
+            echo "- Build manifest artifact: \`build-manifest.yaml\`"
             echo
             echo "### Tags"
             while IFS= read -r tag; do
               echo "- \`$tag\`"
-            done <<< "${{ steps.meta.outputs.tags }}"
+            done <<< "$TAGS"
+            echo
+            echo "### Required fixes"
+            if [ -z "$REQUIRED_FIXES" ]; then
+              echo "- None"
+            else
+              while IFS= read -r fix; do
+                [ -n "$fix" ] || continue
+                echo "- \`$fix\`"
+              done <<< "$REQUIRED_FIXES"
+            fi
             echo
             echo "### Production Compose reference"
             echo
             echo '```yaml'
-            echo "image: ${{ steps.meta.outputs.image }}@${{ steps.build.outputs.digest }}"
+            echo "image: $IMAGE@$DIGEST"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: sub2api-build-manifest
+          path: build-manifest.yaml
+          if-no-files-found: error
