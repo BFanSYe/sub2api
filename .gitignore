@@ -136,6 +136,8 @@ docs/*
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
 !docs/SELF_BUILT_IMAGE_RUNBOOK.md
 !docs/CUSTOMER_PRODUCTION_CUTOVER.md
+!docs/BFANSYE_FORK.md
+!docs/CUSTOM_PATCHES.md
 .serena/
 .codex/
 frontend/coverage/

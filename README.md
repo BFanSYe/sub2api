@@ -16,7 +16,13 @@ English | [中文](README_CN.md) | [日本語](README_JA.md)
 
 </div>
 
-> **Sub2API officially uses only the domains `sub2api.org` and `pincc.ai`. Other websites using the Sub2API name may be third-party deployments or services and are not affiliated with this project. Please verify and exercise your own judgment.**
+> [!NOTE]
+> This repository is BFanSYe's maintained fork of [`Wei-Shaw/sub2api`](https://github.com/Wei-Shaw/sub2api). It tracks upstream fixes while carrying selected fork patches, including the FusionGate-ready/custom homepage and a self-built GHCR image pipeline. The upstream README content is preserved below to keep future upstream syncs low-conflict.
+>
+> Fork-specific docs: [`docs/BFANSYE_FORK.md`](docs/BFANSYE_FORK.md), [`docs/CUSTOM_PATCHES.md`](docs/CUSTOM_PATCHES.md), [`docs/SELF_BUILT_IMAGE_RUNBOOK.md`](docs/SELF_BUILT_IMAGE_RUNBOOK.md), and [`docs/CUSTOMER_PRODUCTION_CUTOVER.md`](docs/CUSTOMER_PRODUCTION_CUTOVER.md).
+
+> [!IMPORTANT]
+> Upstream Sub2API officially uses only the domains `sub2api.org` and `pincc.ai`. Other websites using the Sub2API name may be third-party deployments or services and are not affiliated with upstream Sub2API. Please verify and exercise your own judgment.
 
 ---
 
