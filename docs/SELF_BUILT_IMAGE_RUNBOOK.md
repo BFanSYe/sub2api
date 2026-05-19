@@ -96,6 +96,9 @@
   --image ghcr.io/OWNER/sub2api@sha256:DIGEST \
   --source-repo BFanSYe/sub2api \
   --expected-revision SOURCE_COMMIT \
+  --expected-version 0.1.127 \
+  --expected-platform linux/amd64 \
+  --expected-platform linux/arm64 \
   --upstream-repo Wei-Shaw/sub2api \
   --upstream-ref main \
   --required-fix UPSTREAM_HOTFIX_SHA
@@ -104,11 +107,15 @@
 2. 确认输出包含:
    - image inspect 成功.
    - `org.opencontainers.image.revision` 等于 source commit.
+   - `org.opencontainers.image.version` 等于预期版本（如 `0.1.127`）.
+   - 目标平台（如 `linux/amd64`, `linux/arm64`）存在于 manifest.
    - source commit 存在.
    - required fixes 全部为 source commit 的祖先.
    - missing upstream total 与 non-merge counts 已打印.
 
 ## 生产部署步骤
+
+客户生产从 official image 切换到自建镜像前, 先阅读 `docs/CUSTOMER_PRODUCTION_CUTOVER.md`.
 
 1. 只把 Compose image 改成 digest pinned reference:
 

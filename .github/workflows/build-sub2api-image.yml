@@ -33,6 +33,11 @@ on:
         required: true
         default: "sub2api"
         type: string
+      platforms:
+        description: "Comma-separated Docker platforms."
+        required: true
+        default: "linux/amd64,linux/arm64"
+        type: string
       extra_tag:
         description: "Optional additional tag, e.g. v0.1.126-hotfix. Tag is sanitized before use."
         required: false
@@ -54,7 +59,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build and push linux/amd64 image
+    name: Build and push multi-platform image
     runs-on: ubuntu-latest
 
     steps:
@@ -73,6 +78,7 @@ jobs:
           SOURCE_REPO: ${{ inputs.source_repo }}
           SOURCE_REF: ${{ inputs.source_ref }}
           IMAGE_NAME_INPUT: ${{ inputs.image_name }}
+          PLATFORMS_INPUT: ${{ inputs.platforms }}
           EXTRA_TAG_INPUT: ${{ inputs.extra_tag }}
           TAG_LATEST_INPUT: ${{ inputs.tag_latest }}
         run: |
@@ -97,6 +103,56 @@ jobs:
             exit 1
           fi
 
+          platforms="$(
+            python3 <<'PY'
+          import os
+          import sys
+
+          allowed = {
+              "linux/386",
+              "linux/amd64",
+              "linux/arm/v6",
+              "linux/arm/v7",
+              "linux/arm64",
+              "linux/ppc64le",
+              "linux/riscv64",
+              "linux/s390x",
+          }
+
+          raw = os.environ.get("PLATFORMS_INPUT", "")
+
+          def fail(message):
+              print(f"::error::{message}", file=sys.stderr)
+              sys.exit(1)
+
+          if not raw.strip():
+              fail("platforms must not be empty")
+
+          platforms = []
+          seen = set()
+          for part in raw.replace("\r", "\n").split(","):
+              if not part.strip():
+                  fail("platforms contains an empty platform entry")
+              for token in part.split():
+                  platform = token.strip().lower()
+                  if not platform:
+                      fail("platforms contains an empty platform entry")
+                  if platform not in allowed:
+                      fail(
+                          "unsupported Docker platform: "
+                          f"{token}. Allowed values: {', '.join(sorted(allowed))}"
+                      )
+                  if platform not in seen:
+                      seen.add(platform)
+                      platforms.append(platform)
+
+          if not platforms:
+              fail("platforms must contain at least one platform")
+
+          print(",".join(platforms))
+          PY
+          )"
+
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           image_input="${IMAGE_NAME_INPUT,,}"
           if [[ "$image_input" == ghcr.io/* ]]; then
@@ -112,6 +168,13 @@ jobs:
           source_ref_tag="$(sanitize_tag "$SOURCE_REF")"
           source_repo_tag="$(sanitize_tag "$SOURCE_REPO")"
           date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          version="unknown"
+          if [ -f backend/cmd/server/VERSION ]; then
+            version="$(tr -d '\r\n' < backend/cmd/server/VERSION | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+            if [ -z "$version" ]; then
+              version="unknown"
+            fi
+          fi
 
           tags_file="$(mktemp)"
           # Keep default tags short and production-friendly. The digest remains
@@ -137,6 +200,8 @@ jobs:
             echo "source_ref_tag=$source_ref_tag"
             echo "source_repo_tag=$source_repo_tag"
             echo "date=$date"
+            echo "platforms=$platforms"
+            echo "version=$version"
             echo "tags<<EOF"
             cat "$tags_file"
             echo "EOF"
@@ -144,6 +209,8 @@ jobs:
 
           echo "Resolved commit: $sha"
           echo "Image: $image"
+          echo "Platforms: $platforms"
+          echo "Version: $version"
           echo "Tags:"
           cat "$tags_file"
 
@@ -237,6 +304,9 @@ jobs:
           fi
           grep -n 'corepack prepare pnpm@' Dockerfile
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -253,7 +323,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ steps.meta.outputs.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
@@ -261,6 +331,7 @@ jobs:
             org.opencontainers.image.description=Custom Sub2API image built from ${{ inputs.source_repo }}@${{ steps.meta.outputs.sha }}
             org.opencontainers.image.source=https://github.com/${{ inputs.source_repo }}
             org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
             org.opencontainers.image.created=${{ steps.meta.outputs.date }}
           build-args: |
             COMMIT=${{ steps.meta.outputs.sha }}
@@ -280,6 +351,8 @@ jobs:
           MISSING_UPSTREAM_TOTAL: ${{ steps.upstream.outputs.missing_upstream_total }}
           MISSING_UPSTREAM_NONMERGE: ${{ steps.upstream.outputs.missing_upstream_nonmerge }}
           IMAGE: ${{ steps.meta.outputs.image }}
+          PLATFORMS: ${{ steps.meta.outputs.platforms }}
+          VERSION: ${{ steps.meta.outputs.version }}
           TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.build.outputs.digest }}
           REQUIRED_FIXES: ${{ steps.upstream.outputs.required_fixes }}
@@ -316,6 +389,29 @@ jobs:
             fi
           }
 
+          write_csv_array() {
+            local name="$1"
+            local data="$2"
+            local printed=0
+            local item
+            IFS=',' read -r -a items <<< "$data"
+
+            for item in "${items[@]}"; do
+              [ -n "$item" ] || continue
+              if [ "$printed" -eq 0 ]; then
+                printf '%s:\n' "$name"
+                printed=1
+              fi
+              printf '  - '
+              yaml_quote "$item"
+              printf '\n'
+            done
+
+            if [ "$printed" -eq 0 ]; then
+              printf '%s: []\n' "$name"
+            fi
+          }
+
           {
             printf 'source_repo: '
             yaml_quote "$SOURCE_REPO"
@@ -325,6 +421,9 @@ jobs:
             printf '\n'
             printf 'source_commit: '
             yaml_quote "$SOURCE_COMMIT"
+            printf '\n'
+            printf 'version: '
+            yaml_quote "$VERSION"
             printf '\n'
             printf 'upstream_repo: '
             yaml_quote "$UPSTREAM_REPO"
@@ -340,6 +439,7 @@ jobs:
             printf 'image: '
             yaml_quote "$IMAGE"
             printf '\n'
+            write_csv_array "platforms" "$PLATFORMS"
             write_array "tags" "$TAGS"
             printf 'digest: '
             yaml_quote "$DIGEST"
@@ -356,11 +456,13 @@ jobs:
             echo "- Source repo: \`$SOURCE_REPO\`"
             echo "- Source ref input: \`$SOURCE_REF_INPUT\`"
             echo "- Resolved commit: \`$SOURCE_COMMIT\`"
+            echo "- Version: \`$VERSION\`"
             echo "- Upstream repo: \`$UPSTREAM_REPO\`"
             echo "- Upstream ref: \`$UPSTREAM_REF\`"
             echo "- Upstream commit: \`$UPSTREAM_COMMIT\`"
             echo "- Missing upstream commits: total=\`$MISSING_UPSTREAM_TOTAL\`, non-merge=\`$MISSING_UPSTREAM_NONMERGE\`"
             echo "- Image: \`$IMAGE\`"
+            echo "- Platforms: \`$PLATFORMS\`"
             echo "- Digest: \`$DIGEST\`"
             echo "- Build manifest artifact: \`build-manifest.yaml\`"
             echo

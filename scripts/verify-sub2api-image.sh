@@ -8,6 +8,8 @@ Usage:
     --image IMAGE_REF \
     --source-repo OWNER/REPO_OR_LOCAL_PATH \
     --expected-revision SHA \
+    [--expected-version VERSION] \
+    [--expected-platform PLATFORM ...] \
     [--upstream-repo OWNER/REPO] \
     [--upstream-ref REF] \
     [--required-fix SHA ...]
@@ -23,6 +25,14 @@ Required:
       Source commit expected in org.opencontainers.image.revision.
 
 Optional:
+  --expected-version VERSION
+      Version expected in org.opencontainers.image.version.
+      If omitted, the version label is not required.
+
+  --expected-platform PLATFORM
+      Platform that must exist in the image manifest, e.g. linux/amd64.
+      Repeatable. unknown/unknown attestation manifests are ignored.
+
   --upstream-repo OWNER/REPO
       Upstream GitHub repository used for missing-commit counts.
       Default: Wei-Shaw/sub2api
@@ -87,13 +97,14 @@ source_repo_url_or_path() {
   github_repo_url "$repo"
 }
 
-extract_revision_label() {
+extract_label() {
   local json_file="$1"
-  python3 - "$json_file" <<'PY'
+  local label_name="$2"
+  python3 - "$json_file" "$label_name" <<'PY'
 import json
 import sys
 
-target = "org.opencontainers.image.revision"
+target = sys.argv[2]
 
 with open(sys.argv[1], "r", encoding="utf-8") as fh:
     data = json.load(fh)
@@ -124,11 +135,88 @@ print(found[0] if found else "")
 PY
 }
 
+extract_platforms() {
+  local json_file="$1"
+  local text_file="$2"
+  python3 - "$json_file" "$text_file" <<'PY'
+import json
+import os
+import re
+import sys
+
+json_file = sys.argv[1]
+text_file = sys.argv[2]
+found = []
+seen = set()
+
+
+def add(platform):
+    platform = str(platform).strip().lower()
+    if not platform:
+        return
+    if platform == "unknown/unknown":
+        return
+    parts = platform.split("/")
+    if len(parts) < 2:
+        return
+    if parts[0] == "unknown" and parts[1] == "unknown":
+        return
+    if platform not in seen:
+        seen.add(platform)
+        found.append(platform)
+
+
+def walk(value):
+    if isinstance(value, dict):
+        os_name = value.get("os")
+        architecture = value.get("architecture")
+        variant = value.get("variant")
+        if isinstance(os_name, str) and isinstance(architecture, str):
+            platform = f"{os_name}/{architecture}"
+            if isinstance(variant, str) and variant:
+                platform = f"{platform}/{variant}"
+            add(platform)
+
+        platform_obj = value.get("platform")
+        if isinstance(platform_obj, dict):
+            walk(platform_obj)
+
+        for child in value.values():
+            walk(child)
+    elif isinstance(value, list):
+        for child in value:
+            walk(child)
+
+
+if os.path.exists(json_file) and os.path.getsize(json_file) > 0:
+    try:
+        with open(json_file, "r", encoding="utf-8") as fh:
+            walk(json.load(fh))
+    except json.JSONDecodeError:
+        pass
+
+if os.path.exists(text_file):
+    with open(text_file, "r", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            match = re.search(
+                r"\bPlatform:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?)",
+                line,
+            )
+            if match:
+                add(match.group(1))
+
+for platform in found:
+    print(platform)
+PY
+}
+
 IMAGE_REF=""
 SOURCE_REPO=""
 EXPECTED_REVISION=""
+EXPECTED_VERSION=""
 UPSTREAM_REPO="Wei-Shaw/sub2api"
 UPSTREAM_REF="main"
+declare -a EXPECTED_PLATFORMS=()
 declare -a REQUIRED_FIXES=()
 
 while [ "$#" -gt 0 ]; do
@@ -146,6 +234,18 @@ while [ "$#" -gt 0 ]; do
     --expected-revision)
       require_value "$1" "${2:-}"
       EXPECTED_REVISION="$2"
+      shift 2
+      ;;
+    --expected-version)
+      require_value "$1" "${2:-}"
+      EXPECTED_VERSION="$2"
+      shift 2
+      ;;
+    --expected-platform)
+      require_value "$1" "${2:-}"
+      platform="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+      [ -n "$platform" ] || die "--expected-platform must not be empty"
+      EXPECTED_PLATFORMS+=("$platform")
       shift 2
       ;;
     --upstream-repo)
@@ -245,7 +345,7 @@ else
 fi
 
 if docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .}}' >"$tmpdir/image.inspect.json" 2>"$tmpdir/image.inspect-json.err"; then
-  revision_label="$(extract_revision_label "$tmpdir/image.inspect.json")"
+  revision_label="$(extract_label "$tmpdir/image.inspect.json" "org.opencontainers.image.revision")"
   if [ -n "$revision_label" ]; then
     if [ "$revision_label" = "$source_commit" ]; then
       ok "image revision label matches expected revision: $revision_label"
@@ -257,10 +357,52 @@ if docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .}}' >"$tmpdir
     printf 'FAIL: org.opencontainers.image.revision label was not found in imagetools JSON output\n' >&2
     failed=1
   fi
+
+  if [ -n "$EXPECTED_VERSION" ]; then
+    version_label="$(extract_label "$tmpdir/image.inspect.json" "org.opencontainers.image.version")"
+    if [ -n "$version_label" ]; then
+      if [ "$version_label" = "$EXPECTED_VERSION" ]; then
+        ok "image version label matches expected version: $version_label"
+      else
+        printf 'FAIL: image version label mismatch. expected=%s actual=%s\n' "$EXPECTED_VERSION" "$version_label" >&2
+        failed=1
+      fi
+    else
+      printf 'FAIL: org.opencontainers.image.version label was not found in imagetools JSON output\n' >&2
+      failed=1
+    fi
+  fi
 else
   sed 's/^/FAIL: /' "$tmpdir/image.inspect-json.err" >&2 || true
   printf 'FAIL: could not inspect OCI labels via imagetools JSON\n' >&2
   failed=1
+fi
+
+if [ "${#EXPECTED_PLATFORMS[@]}" -gt 0 ]; then
+  mapfile -t detected_platforms < <(extract_platforms "$tmpdir/image.inspect.json" "$tmpdir/image.inspect.txt")
+
+  if [ "${#detected_platforms[@]}" -eq 0 ]; then
+    printf 'FAIL: no image platforms were found in imagetools inspect output\n' >&2
+    failed=1
+  else
+    info "image platforms detected: ${detected_platforms[*]}"
+    for expected_platform in "${EXPECTED_PLATFORMS[@]}"; do
+      platform_found=0
+      for detected_platform in "${detected_platforms[@]}"; do
+        if [ "$detected_platform" = "$expected_platform" ]; then
+          platform_found=1
+          break
+        fi
+      done
+
+      if [ "$platform_found" -eq 1 ]; then
+        ok "image platform exists: $expected_platform"
+      else
+        printf 'FAIL: expected image platform was not found: %s\n' "$expected_platform" >&2
+        failed=1
+      fi
+    done
+  fi
 fi
 
 if [ "$failed" -ne 0 ]; then
