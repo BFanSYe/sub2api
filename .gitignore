@@ -118,7 +118,10 @@ backend/.installed
 tests
 CLAUDE.md
 .claude
-scripts
+scripts/*
+!scripts/
+!scripts/verify-sub2api-image.sh
+!scripts/verify-sub2api-deploy.sh
 .code-review-state
 #openspec/
 code-reviews/
@@ -131,6 +134,7 @@ docs/*
 !docs/PAYMENT.md
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
+!docs/SELF_BUILT_IMAGE_RUNBOOK.md
 .serena/
 .codex/
 frontend/coverage/

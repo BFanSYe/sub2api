@@ -1,4 +1,4 @@
-.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan
+.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan verify-sub2api-image-help verify-sub2api-deploy-help
 
 FRONTEND_CRITICAL_VITEST := \
 	src/views/auth/__tests__/LinuxDoCallbackView.spec.ts \
@@ -42,3 +42,9 @@ test-datamanagementd:
 
 secret-scan:
 	@python3 tools/secret_scan.py
+
+verify-sub2api-image-help:
+	@./scripts/verify-sub2api-image.sh --help
+
+verify-sub2api-deploy-help:
+	@./scripts/verify-sub2api-deploy.sh --help
