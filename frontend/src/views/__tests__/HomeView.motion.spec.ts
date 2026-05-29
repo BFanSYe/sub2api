@@ -20,3 +20,49 @@ describe('HomeView reduced-motion motion policy', () => {
     expect(themeSource).not.toMatch(/\.theme-1node\s+\*,/)
   })
 })
+
+describe('HomeView pointer-only hover policy', () => {
+  it('gates .hv-pain-card hover effects behind (hover: hover) and (pointer: fine)', () => {
+    // The three :hover rules must live inside a hover-capable media query
+    // to avoid iOS Safari sticky-hover keeping the ::before teal halo visible.
+    expect(homeViewSource).toMatch(
+      /@media\s*\(hover:\s*hover\)\s+and\s+\(pointer:\s*fine\)\s*\{[\s\S]*?\.hv-pain-card:hover\s*\{[\s\S]*?\.hv-pain-card:hover::before[\s\S]*?\.hv-pain-card:hover\s+\.hv-pain-card__icon[\s\S]*?\}\s*\}/
+    )
+  })
+
+  it('does not leave any .hv-pain-card:hover rule outside a hover-capable media query', () => {
+    // Find every .hv-pain-card:hover occurrence and confirm each one is
+    // preceded (within the file) by an opening `@media (hover: hover) ... {`
+    // that has not yet been closed.
+    const lines = homeViewSource.split('\n')
+    let inHoverGate = 0 // depth counter
+    let openBraces = 0
+    let lineIdx = 0
+    for (const line of lines) {
+      lineIdx++
+      if (/@media\s*\(hover:\s*hover\)\s+and\s+\(pointer:\s*fine\)\s*\{/.test(line)) {
+        inHoverGate++
+        // Count braces on the same line so single-line blocks like
+        // `@media (hover: hover) and (pointer: fine) { .x:hover {} }` close cleanly.
+        openBraces += (line.match(/\{/g) || []).length
+        openBraces -= (line.match(/\}/g) || []).length
+        if (openBraces <= 0) {
+          inHoverGate--
+          openBraces = 0
+        }
+        continue
+      }
+      if (inHoverGate > 0) {
+        openBraces += (line.match(/\{/g) || []).length
+        openBraces -= (line.match(/\}/g) || []).length
+        if (openBraces <= 0) {
+          inHoverGate--
+          openBraces = 0
+        }
+      }
+      if (/\.hv-pain-card:hover/.test(line)) {
+        expect(inHoverGate, `line ${lineIdx} has .hv-pain-card:hover outside hover-gated @media`).toBeGreaterThan(0)
+      }
+    }
+  })
+})

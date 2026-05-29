@@ -873,14 +873,17 @@ onMounted(() => {
 .hv-pain-card--4::before { background: var(--c4-d); }
 .hv--dark .hv-pain-card--4::before { background: var(--c4-a); }
 
-.hv-pain-card:hover {
-  transform: translateY(-5px);
-  border-color: var(--t-line-3);
-  box-shadow: 0 18px 40px color-mix(in srgb, var(--t-bg) 80%, transparent);
-}
-.hv-pain-card:hover::before { opacity: 0.45; }
-.hv-pain-card:hover .hv-pain-card__icon {
-  transform: translateY(-2px) scale(1.08);
+/* iOS Safari: :hover sticks after tap; gate hover effects to true pointer devices to avoid persistent ::before halo (see HomeView.motion.spec.ts). */
+@media (hover: hover) and (pointer: fine) {
+  .hv-pain-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--t-line-3);
+    box-shadow: 0 18px 40px color-mix(in srgb, var(--t-bg) 80%, transparent);
+  }
+  .hv-pain-card:hover::before { opacity: 0.45; }
+  .hv-pain-card:hover .hv-pain-card__icon {
+    transform: translateY(-2px) scale(1.08);
+  }
 }
 .hv-pain-card__icon {
   position: relative;
