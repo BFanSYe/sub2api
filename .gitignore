@@ -138,6 +138,8 @@ docs/*
 !docs/CUSTOMER_PRODUCTION_CUTOVER.md
 !docs/BFANSYE_FORK.md
 !docs/CUSTOM_PATCHES.md
+!docs/legal/
+!docs/legal/*.md
 .serena/
 .codex/
 frontend/coverage/
