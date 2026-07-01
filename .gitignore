@@ -122,6 +122,8 @@ scripts/*
 !scripts/
 !scripts/verify-sub2api-image.sh
 !scripts/verify-sub2api-deploy.sh
+!backend/scripts/
+!backend/scripts/resolve-version.sh
 .code-review-state
 #openspec/
 code-reviews/
