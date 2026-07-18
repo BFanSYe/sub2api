@@ -18,6 +18,8 @@ ARG NPM_CONFIG_REGISTRY=
 # -----------------------------------------------------------------------------
 # Stage 1: Frontend Builder
 # -----------------------------------------------------------------------------
+# --platform=$BUILDPLATFORM: the frontend output is JS (arch-neutral), so build
+# it on the native host arch instead of under QEMU emulation for the target.
 FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS frontend-builder
 ARG NPM_CONFIG_REGISTRY
 
@@ -44,13 +46,11 @@ RUN pnpm run build
 # -----------------------------------------------------------------------------
 # Stage 2: Backend Builder
 # -----------------------------------------------------------------------------
+# --platform=$BUILDPLATFORM: run the Go toolchain on the native host arch and
+# cross-compile to the target arch below. The binary is CGO_ENABLED=0, so this
+# is a clean pure-Go cross-compile — no QEMU emulation of go mod download / go
+# build (emulated networking here was dropping module fetches with EOF).
 FROM --platform=$BUILDPLATFORM ${GOLANG_IMAGE} AS backend-builder
-
-# BuildKit platform arguments for cross-compiling the Go backend while keeping
-# expensive Node/Go builder stages on the native runner architecture.
-ARG TARGETOS
-ARG TARGETARCH
-ARG TARGETVARIANT
 
 # Build arguments for version info (set by CI)
 ARG VERSION=
@@ -58,6 +58,10 @@ ARG COMMIT=docker
 ARG DATE
 ARG GOPROXY
 ARG GOSUMDB
+# Populated by buildx from the --platform target (e.g. linux/amd64).
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
 
 ENV GOPROXY=${GOPROXY}
 ENV GOSUMDB=${GOSUMDB}
@@ -69,7 +73,10 @@ WORKDIR /app/backend
 
 # Copy go mod files first (better caching)
 COPY backend/go.mod backend/go.sum ./
-RUN go mod download
+# Cache mount keeps the module cache across builds so a transient CDN blip on
+# retry resumes instead of re-fetching every zip from scratch.
+RUN --mount=type=cache,id=sub2api-gomod,target=/go/pkg/mod \
+    go mod download
 
 # Copy backend source first
 COPY backend/ ./
@@ -79,7 +86,9 @@ COPY --from=frontend-builder /app/backend/internal/web/dist ./internal/web/dist
 
 # Build the binary (BuildType=release for CI builds, embed frontend)
 # Version precedence: build arg VERSION > exact git tag > cmd/server/VERSION
-RUN VERSION_VALUE="${VERSION}" && \
+RUN --mount=type=cache,id=sub2api-gomod,target=/go/pkg/mod \
+    --mount=type=cache,id=sub2api-gobuild,target=/root/.cache/go-build \
+    VERSION_VALUE="${VERSION}" && \
     if [ -z "${VERSION_VALUE}" ]; then VERSION_VALUE="$(./scripts/resolve-version.sh)"; fi && \
     DATE_VALUE="${DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
     GOOS_VALUE="${TARGETOS:-linux}" && \
