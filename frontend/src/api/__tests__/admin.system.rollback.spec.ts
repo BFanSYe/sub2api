@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const ROLLBACK_TIMEOUT_MS = 15 * 60 * 1000
+
 const { get, post } = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -41,7 +43,11 @@ describe('admin system rollback API', () => {
 
     const result = await rollback('0.1.146')
 
-    expect(post).toHaveBeenCalledWith('/admin/system/rollback', { version: '0.1.146' })
+    expect(post).toHaveBeenCalledWith(
+      '/admin/system/rollback',
+      { version: '0.1.146' },
+      { timeout: ROLLBACK_TIMEOUT_MS }
+    )
     expect(result.need_restart).toBe(true)
   })
 
@@ -50,6 +56,8 @@ describe('admin system rollback API', () => {
 
     await rollback()
 
-    expect(post).toHaveBeenCalledWith('/admin/system/rollback', undefined)
+    expect(post).toHaveBeenCalledWith('/admin/system/rollback', undefined, {
+      timeout: ROLLBACK_TIMEOUT_MS
+    })
   })
 })

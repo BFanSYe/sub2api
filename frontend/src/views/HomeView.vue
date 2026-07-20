@@ -28,8 +28,7 @@
           <span class="hv-brand__mark">
             <span class="hv-brand__ring hv-brand__ring--outer" aria-hidden="true"></span>
             <span class="hv-brand__ring hv-brand__ring--inner" aria-hidden="true"></span>
-            <img v-if="siteLogo" :src="siteLogo" alt="" />
-            <span v-else class="hv-brand__dot"></span>
+            <img :src="siteLogo || '/logo.svg'" alt="" />
           </span>
           <span class="hv-brand__text">{{ siteName }}</span>
         </a>
