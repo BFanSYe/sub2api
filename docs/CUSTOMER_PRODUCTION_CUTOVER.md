@@ -3,7 +3,7 @@
 ## Scope
 
 - Custom image source: `BFanSYe/sub2api` at the exact `source_commit` recorded in the build manifest and GitHub Actions summary.
-- Baseline: official Sub2API v0.1.127 plus the upstream `main` commits recorded in the build manifest.
+- Baseline: official Sub2API v0.1.164 plus the exact upstream `main` commit recorded in the build manifest.
 - Deployment requirement: deploy by immutable image digest only, for example `image@sha256:...`.
 - Included changes: official latest fixes plus fork homepage and CI/image-build changes.
 - Backend compatibility statement: no fork-specific backend API changes and no fork-specific database migration changes are included in this cutover scope.
@@ -29,7 +29,7 @@
 
 - Confirm the customer approved the FusionGate/custom homepage.
 - Confirm the image reference is an immutable digest, not `latest` or a mutable tag.
-- Confirm the image version label is `0.1.127`.
+- Confirm the image version label is `0.1.164`.
 - Confirm the image revision label matches the selected `source_commit` in the build manifest.
 - Confirm the required platform exists in the image manifest.
 - Confirm staging or canary has passed smoke tests.
@@ -45,7 +45,7 @@ Use the image digest selected for release:
   --image IMAGE_REF_WITH_DIGEST \
   --source-repo BFanSYe/sub2api \
   --expected-revision SOURCE_COMMIT_FROM_BUILD_MANIFEST \
-  --expected-version 0.1.127 \
+  --expected-version 0.1.164 \
   --expected-platform linux/amd64 \
   --expected-platform linux/arm64
 ```

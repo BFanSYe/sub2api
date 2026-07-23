@@ -16,6 +16,7 @@ It is not a release changelog. Use it as a merge/review checklist: if upstream t
 
 - [FusionGate-ready public homepage](#fusiongate-ready-public-homepage)
 - [Self-built GHCR image pipeline](#self-built-ghcr-image-pipeline)
+- [Build-tag lint compatibility](#build-tag-lint-compatibility)
 - [Customer production cutover documentation](#customer-production-cutover-documentation)
 
 ## FusionGate-ready Public Homepage
@@ -28,8 +29,8 @@ Primary files:
 
 - `frontend/src/views/HomeView.vue`
 - `frontend/src/composables/useScrollReveal.ts`
-- `frontend/src/i18n/locales/en.ts`
-- `frontend/src/i18n/locales/zh.ts`
+- `frontend/src/i18n/locales/en/landing.ts`
+- `frontend/src/i18n/locales/zh/landing.ts`
 
 Runtime behavior:
 
@@ -105,6 +106,27 @@ Upstream conflict notes:
 - Preserve source/upstream repo validation before using user-provided workflow inputs in labels, URLs, or fetch commands.
 - Keep expensive build stages on the build platform where possible and cross-compile Go for the target platform. This avoids slow QEMU-heavy multi-arch builds.
 - Do not put production configuration or secrets into build args, Docker layers, workflow summaries, image labels, or docs.
+
+## Build-tag Lint Compatibility
+
+Status: maintained until upstream adopts an equivalent fix.
+
+Scope: embedded frontend lint behavior only; no intended runtime behavior change.
+
+Primary files:
+
+- `backend/internal/server/router.go`
+- `backend/internal/web/embed_on.go`
+
+Behavior and rationale:
+
+- Keep the embedded-frontend fallback path while documenting the intentional `SA4023` cross-build-tag false positive from the `!embed` stub.
+- Explicitly discard the impossible `bytes.Buffer.Write` errors so production-tag `errcheck` remains clean.
+- Run `golangci-lint` both without build tags and with `--build-tags embed`; neither mode may be skipped.
+
+Upstream conflict notes:
+
+- Re-check these two narrow changes on every upstream sync and remove them if upstream adopts equivalent lint-clean behavior.
 
 ## Customer Production Cutover Documentation
 

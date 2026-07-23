@@ -79,7 +79,7 @@
 2. 设置 `source_repo` 为 `BFanSYe/sub2api`.
 3. 设置 `source_ref` 为待发布 commit SHA.
 4. 设置 `upstream_repo` 为 `Wei-Shaw/sub2api`.
-5. 设置 `upstream_ref` 为 `main`.
+5. 设置 `upstream_ref` 为本次审查并冻结的精确 upstream commit SHA（例如 `UPSTREAM_COMMIT`），不要在生产构建中使用会继续移动的 `main`.
 6. 在 `required_fixes` 中填写必须包含的 upstream hotfix SHA.
 7. 设置 `image_name` 为生产使用的 GHCR image name.
 8. 保持 `tag_latest=false`, 除非明确需要维护非生产 alias.
@@ -96,18 +96,18 @@
   --image ghcr.io/OWNER/sub2api@sha256:DIGEST \
   --source-repo BFanSYe/sub2api \
   --expected-revision SOURCE_COMMIT \
-  --expected-version 0.1.127 \
+  --expected-version 0.1.164 \
   --expected-platform linux/amd64 \
   --expected-platform linux/arm64 \
   --upstream-repo Wei-Shaw/sub2api \
-  --upstream-ref main \
+  --upstream-ref UPSTREAM_COMMIT \
   --required-fix UPSTREAM_HOTFIX_SHA
 ```
 
 2. 确认输出包含:
    - image inspect 成功.
    - `org.opencontainers.image.revision` 等于 source commit.
-   - `org.opencontainers.image.version` 等于预期版本（如 `0.1.127`）.
+   - `org.opencontainers.image.version` 等于预期版本（如 `0.1.164`）.
    - 目标平台（如 `linux/amd64`, `linux/arm64`）存在于 manifest.
    - source commit 存在.
    - required fixes 全部为 source commit 的祖先.
